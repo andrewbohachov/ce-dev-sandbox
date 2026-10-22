@@ -41,7 +41,11 @@ jobs:
       - name: Build for GitHub Pages
         run: |
           export ASTRO_SITE="https://${GITHUB_REPOSITORY_OWNER,,}.github.io"
-          export ASTRO_BASE="/${GITHUB_REPOSITORY#*/}/"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export ASTRO_BASE="/${GITHUB_REPOSITORY#*/}/pr-preview/pr-${{ github.event.number }}/"
+          else
+            export ASTRO_BASE="/${GITHUB_REPOSITORY#*/}/"
+          fi
           npm run build
 
       - name: Validate HTML
@@ -130,3 +134,63 @@ jobs:
           folder: dist
           branch: gh-pages
           clean-exclude: pr-preview/
+
+  deploy-preview:
+    name: deploy-preview
+    needs: build
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: pages-preview-${{ github.event.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: site
+          path: dist
+
+      - name: Deploy preview to gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist
+          branch: gh-pages
+          target-folder: pr-preview/pr-${{ github.event.number }}
+          clean: false
+
+      - name: Comment PR with preview link
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const owner = context.repo.owner.toLowerCase();
+            const repo = context.repo.repo;
+            const prNumber = context.issue.number;
+            const previewUrl = `https://${owner}.github.io/${repo}/pr-preview/pr-${prNumber}/`;
+            const header = '### 🚀 Preview Deployment';
+            const body = `${header}\n\nYour changes have been deployed to preview:\n👉 **[View Preview](${previewUrl})**\n\n_Updated at: ${new Date().toUTCString()}_`;
+
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            const existingComment = comments.data.find(c => c.body && c.body.includes(header));
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: body,
+              });
+            }
