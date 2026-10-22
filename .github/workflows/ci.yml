@@ -135,6 +135,35 @@ jobs:
           branch: gh-pages
           clean-exclude: pr-preview/
 
+  deploy-home-prod:
+    name: deploy (home-prod)
+    needs: [build, lighthouse]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: home-prod-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: site
+          path: dist
+
+      - name: Deploy to home production via SSH
+        if: "${{ secrets.PROD_HOST != '' }}"
+        env:
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          HOST: ${{ secrets.PROD_HOST }}
+          USER: ${{ secrets.PROD_USER }}
+          PORT: ${{ secrets.PROD_PORT || '22' }}
+          TARGET: ${{ secrets.PROD_TARGET_DIR || '/var/www/ce-knu-site' }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$PORT" "$HOST" >> ~/.ssh/known_hosts
+          rsync -avz --delete -e "ssh -p $PORT -i ~/.ssh/id_ed25519" dist/ "$USER@$HOST:$TARGET"
+
   deploy-preview:
     name: deploy-preview
     needs: build
