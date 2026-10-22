@@ -82,9 +82,33 @@ jobs:
           subjectPattern: ^[^A-Z].+$
           subjectPatternError: 'Start the summary with a lower-case letter, e.g. "feat(news): add news list page".'
 
+  lighthouse:
+    name: lighthouse (${{ matrix.preset }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [mobile, desktop]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: site
+          path: dist
+
+      - name: Run Lighthouse CI (${{ matrix.preset }})
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: .github/lighthouse/lighthouserc.${{ matrix.preset }}.json
+          artifactName: lighthouse-results-${{ matrix.preset }}
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
   deploy:
     name: deploy
-    needs: build
+    needs: [build, lighthouse]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
