@@ -1,0 +1,5 @@
+# Apache settings for the department server. GitHub Pages ignores this file;
+# check it locally with `docker compose up --build site`.
+Options -Indexes
+AddDefaultCharset utf-8
+ErrorDocument 404 /404.html
