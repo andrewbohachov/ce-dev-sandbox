@@ -150,7 +150,6 @@ jobs:
           path: dist
 
       - name: Deploy to home production via SSH
-        if: "${{ secrets.PROD_HOST != '' }}"
         env:
           SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
           HOST: ${{ secrets.PROD_HOST }}
@@ -158,6 +157,10 @@ jobs:
           PORT: ${{ secrets.PROD_PORT || '22' }}
           TARGET: ${{ secrets.PROD_TARGET_DIR || '/var/www/ce-knu-site' }}
         run: |
+          if [ -z "$HOST" ] || [ -z "$SSH_KEY" ]; then
+            echo "PROD_HOST or PROD_SSH_KEY secret is not configured. Skipping home-prod deployment."
+            exit 0
+          fi
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
